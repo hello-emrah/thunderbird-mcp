@@ -6686,18 +6686,30 @@ var mcpServer = class extends ExtensionCommon.ExtensionAPI {
 	                        // matches the resolved compose mode -- shipping an HTML envelope
 	                        // for a plain-format send would otherwise render as literal
 	                        // markup in the recipient's mail client.
+	                        // Honour the identity's "Automatically quote the original
+	                        // message when replying" setting, as the native review
+	                        // path already does.
+	                        let autoQuote = true;
+	                        try {
+	                          autoQuote = msgComposeParams.identity.autoQuote !== false;
+	                        } catch {}
 	                        if (replyUseHtml) {
-	                          const quotedLines = originalBody.split('\n').map(line =>
-	                            `&gt; ${escapeHtml(line)}`
-	                          ).join('<br>');
-	                          const quotedHtml = escapeHtml(originalBody).replace(/\n/g, '<br>');
-	                          const quoteBlock = isHtml
-	                            ? `<br><br>On ${dateStr}, ${escapeHtml(author)} wrote:<blockquote type="cite">${quotedHtml}</blockquote>`
-	                            : `<br><br>On ${dateStr}, ${escapeHtml(author)} wrote:<br>${quotedLines}`;
+	                          let quoteBlock = "";
+	                          if (autoQuote) {
+	                            const quotedLines = originalBody.split('\n').map(line =>
+	                              `&gt; ${escapeHtml(line)}`
+	                            ).join('<br>');
+	                            const quotedHtml = escapeHtml(originalBody).replace(/\n/g, '<br>');
+	                            quoteBlock = isHtml
+	                              ? `<br><br>On ${dateStr}, ${escapeHtml(author)} wrote:<blockquote type="cite">${quotedHtml}</blockquote>`
+	                              : `<br><br>On ${dateStr}, ${escapeHtml(author)} wrote:<br>${quotedLines}`;
+	                          }
 	                          composeFields.body = `<html><head><meta charset="UTF-8"></head><body>${formatBodyHtml(body, isHtml)}${quoteBlock}</body></html>`;
-	                        } else {
+	                        } else if (autoQuote) {
 	                          const quotedLines = originalBody.split('\n').map(line => `> ${line}`).join('\n');
 	                          composeFields.body = `${body || ""}\n\nOn ${dateStr}, ${author} wrote:\n${quotedLines}`;
+	                        } else {
+	                          composeFields.body = body || "";
 	                        }
 
 	                        sendMessageDirectly(composeFields, msgComposeParams.identity, fileDescs, msgURI, compType, Ci.nsIMsgCompDeliverMode.Now, replyUseHtml ? "text/html" : "text/plain").then(result => {
